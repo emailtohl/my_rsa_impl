@@ -2,6 +2,9 @@ package com.github.emailtohl.rsa.core;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 /**
  * RSA算法需要6个参数，p,q,n,φ(n),e,d ，其中：
@@ -19,6 +22,7 @@ import java.security.SecureRandom;
 public class KeyGenerator {
 	private static final BigInteger ZERO = BigInteger.valueOf(0);
 	private static final BigInteger ONE = BigInteger.valueOf(1);
+	private static Logger log = LogManager.getLogManager().getLogger(KeyGenerator.class.getName());
 	
 	public KeyPairs generateKeys(int bitLength) {
 		BigInteger p, q, n, fn, e, d;
@@ -76,7 +80,7 @@ public class KeyGenerator {
 				if (fn.remainder(e).compareTo(ZERO) == 0) {
 					e = BigInteger.valueOf(3);
 					if (fn.remainder(e).compareTo(ZERO) == 0) {
-						System.err.println("Create a RSA parameter failure, re execution");// 如果模n与上面的素数都不互素的话，创建RSA参数失败
+						log.log(Level.WARNING, "Create a RSA parameter failure, re execution");// 如果模n与上面的素数都不互素的话，创建RSA参数失败
 						throw (new RuntimeException("Not selected to the correct public key ！"));// 抛出异常，重新执行
 					}
 				}
@@ -95,9 +99,9 @@ public class KeyGenerator {
 		}
 		private void generateD() {
 			BigInteger gcd = extendEuclid(fn, e);// 在调用扩展欧几里得算法时，计算出x，y值
-			System.out.println("gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
-			System.out.println("x = " + x);
-			System.out.println("y = " + y);
+			log.fine("gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
+			log.fine("x = " + x);
+			log.fine("y = " + y);
 			/**
 			 * 调用了扩展欧几里得方法后，x,y满足： (φ(n) * x) + (e * y) = 1
 			 * 这里不能完全保证y的正负性，如果y是负数，则需转换为同余正数，例如：-3 ≡ 2 (mod 5)
@@ -106,8 +110,8 @@ public class KeyGenerator {
 				y = y.add(fn);
 			
 			d = y;
-			System.out.println("d = " + d);
-			System.out.println("e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
+			log.fine("d = " + d);
+			log.fine("e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
 		}
 
 		/**
@@ -136,19 +140,19 @@ public class KeyGenerator {
 		for(int i = 0;i < 3;i++){// 做三次检查，确保RSA的参数的正确性
 			// 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
 			BigInteger mm = new BigInteger(mArrayLength, new SecureRandom());
-			System.out.println("test m = " + mm);
+			log.fine("test m = " + mm);
 			//BigInteger cc = mm.modPow(e, n);
 			BigInteger cc = powModByMontgomery(mm, e, n);
-			System.out.println("test c = " + cc);
+			log.fine("test c = " + cc);
 			//BigInteger dm = cc.modPow(d, n);
 			BigInteger dm = powModByMontgomery(cc, d, n);
-			System.out.println("test dm = " + dm);
+			log.fine("test dm = " + dm);
 			if(mm.compareTo(dm) != 0) {
-				System.out.println("Test failed");
+				log.fine("Test failed");
 				return false;
 			}
 			else {
-				System.out.println("Test passed " + (i+1) + " times");
+				log.fine("Test passed " + (i+1) + " times");
 			}
 		}
 		return true;
@@ -165,7 +169,7 @@ public class KeyGenerator {
 	 * 幂模运算也遵循乘法分配率，所以对于大数的幂模运算，可以先将底数做模运算后，再做指数运算，这样可以将数值运算保持在较小的数域范围内。
 	 * 蒙哥马利算法计算大数的幂模运算的思路是不断将指数进行除2分解，直到指数分解到1为止，当然每次分解指数时，同时也在计算底数的平方。
 	 */
-	private BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
+	public BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
 		if (exponent.compareTo(BigInteger.valueOf(1)) == 0) {// 如果指数为1，那么直接返回底数
 			return bottomNumber.remainder(module);
 		} else {
@@ -178,22 +182,5 @@ public class KeyGenerator {
 			else
 				return (powModByMontgomery(bottomNumber.multiply(bottomNumber).remainder(module), exponent.shiftRight(1),module));
 		}
-	}
-	/**
-	 * 测试
-	 * @param args
-	 */
-	public static void main(String[] args) {
-		KeyGenerator keyGenerator = new KeyGenerator();
-		KeyPairs keys = keyGenerator.generateKeys(1024);
-		String s = "hello RSA!";
-		byte[] b = s.getBytes();
-		BigInteger m = new BigInteger(b);// 注意，明文的数字一定要小于模
-		BigInteger c = keyGenerator.powModByMontgomery(m, keys.getPublicKey(), keys.getModule());
-		System.out.println("密文是： " + c);
-		m = keyGenerator.powModByMontgomery(c, keys.getPrivateKey(), keys.getModule());
-		b = m.toByteArray();
-		s = new String(b);
-		System.out.println("解密后： " + s);
 	}
 }
