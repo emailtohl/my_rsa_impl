@@ -1,7 +1,11 @@
 package com.github.emailtohl.rsa.core;
 
 import java.math.BigInteger;
-
+/**
+ * 存放公钥，私钥以及模的对象
+ * 
+ * @author helei
+ */
 public class KeyPairs {
 	private transient BigInteger module;
 	private transient BigInteger publicKey;

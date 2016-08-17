@@ -18,6 +18,8 @@ import java.util.logging.Logger;
  * c是加密后的值，加密和解密的过程实际上进行幂模运算，过程如下：
  * 加密：c = m^e % n
  * 解密：m = c^d % n
+ * 
+ * @author HeLei
  */
 public class KeyGenerator {
 	private static final BigInteger ZERO = BigInteger.valueOf(0);
@@ -48,11 +50,21 @@ public class KeyGenerator {
 		keys.setcArrayLength(cArrayLength);
 		return keys;
 	}
-	
+	/**
+	 * 用JDK自带的方法获取大素数，但需注意的是，获取的值，只是“有可能”是素数，所以还需要测试
+	 * @param bitLength
+	 * @return
+	 */
 	private BigInteger generateP(int bitLength) {
 		return BigInteger.probablePrime(bitLength, new SecureRandom());
 	}
 
+	/**
+	 * 同上
+	 * @param bitLength
+	 * @param p
+	 * @return
+	 */
 	private BigInteger generateQ(int bitLength, BigInteger p) {
 		BigInteger q;
 		do {
@@ -60,17 +72,33 @@ public class KeyGenerator {
 		} while (q.equals(p));
 		return q;
 	}
-
+	/**
+	 * 通过两个素数求得模N
+	 * @param p
+	 * @param q
+	 * @return
+	 */
 	private BigInteger generateN(BigInteger p, BigInteger q) {
 		return p.multiply(q);
 	}
 
+	/**
+	 * p，q如果是素数的话，φ(p * q) = φ(p) * φ(q)
+	 * @param p
+	 * @param q
+	 * @return
+	 */
 	private BigInteger generateFn(BigInteger p, BigInteger q) {
 		BigInteger fp = p.subtract(ONE);
 		BigInteger fq = q.subtract(ONE);
 		return fp.multiply(fq);
 	}
 
+	/**
+	 * 对于e来说，选取一个素数即可，一般选65537
+	 * @param fn
+	 * @return
+	 */
 	private BigInteger generateE(BigInteger fn) {
 		BigInteger e = BigInteger.valueOf(65537);// 65537的二进制只有两个1，据说加密速度会更快
 		if (fn.remainder(e).compareTo(ZERO) == 0) {
@@ -89,7 +117,10 @@ public class KeyGenerator {
 		return e;
 	}
 	
-	// 计算逆元需要使用成员变量，为了避免使用同步锁，故创建内部类
+	/**
+	 * 计算逆元需要使用成员变量，为了避免使用同步锁，故创建内部类
+	 * @author helei
+	 */
 	private class Euclid {
 		private BigInteger fn, e, x, y, d;// x，y成员变量，用于保存generateD()计算时的中间值
 		Euclid(BigInteger fn, BigInteger e) {
@@ -135,7 +166,14 @@ public class KeyGenerator {
 			return d;
 		}
 	}
-
+	/**
+	 * 由于获取的p，q“有可能”是素数，所以在使用前，先做测试，为保证万一，验证3次
+	 * @param e
+	 * @param d
+	 * @param n
+	 * @param mArrayLength
+	 * @return
+	 */
 	private boolean test(BigInteger e, BigInteger d, BigInteger n, int mArrayLength) {
 		for(int i = 0;i < 3;i++){// 做三次检查，确保RSA的参数的正确性
 			// 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
