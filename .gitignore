@@ -1,15 +1,41 @@
 /target/
 
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+.vscode
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/build/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Compiled class file
 *.class
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+# Log file
+*.log
+*.tlog
 
 # Package Files #
 *.jar
 *.war
+*.nar
 *.ear
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
+*.zip
+*.tar.gz
+*.rar

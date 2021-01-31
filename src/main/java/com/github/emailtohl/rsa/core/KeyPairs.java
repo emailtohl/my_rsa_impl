@@ -1,19 +1,20 @@
 package com.github.emailtohl.rsa.core;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 /**
  * 存放公钥，私钥以及模的对象
  * 
  * @author helei
  */
-public class KeyPairs {
-	private transient BigInteger module;
-	private transient BigInteger publicKey;
-	private transient BigInteger privateKey;
-	private transient int moduleBitLength;
-	private transient int mArrayLength;
-	private transient int cArrayLength;
-	
+public class KeyPairs implements Serializable {
+	private BigInteger module;
+	private BigInteger publicKey;
+	private BigInteger privateKey;
+	private int moduleBitLength;
+	private int mArrayLength;
+	private int cArrayLength;
+
 	public BigInteger getModule() {
 		return module;
 	}
@@ -50,7 +51,7 @@ public class KeyPairs {
 	public void setcArrayLength(int cArrayLength) {
 		this.cArrayLength = cArrayLength;
 	}
-	
+
 	@Override
 	public String toString() {
 		return "KeyPairs \n[module=" + module + "\n publicKey=" + publicKey

@@ -391,37 +391,25 @@ gcd(a,b) = gcd(b,r) = gcd(b,a mod b) 。
 通过拓展欧几里得算法计算：
 
 ```java
-private BigInteger x, y;// 定义x，y成员变量，用于保存下面generateD()计算时的中间值
-
-private void generateD() {
-	BigInteger gcd = extendEuclid(e, fn);// 在调用扩展欧几里得算法时，计算出x，y值
-	System.out.println("gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
-	System.out.println("x = " + x);
-	System.out.println("y = " + y);
-	System.out.println("e * x (mod φ(n)) = " + (e.multiply(x).remainder(fn)));
-	/*
-	 * 调用了扩展欧几里得方法后，x,y被计算出来了，但是需要注意的是x可能是负数，虽然x虽然满足： (e * x) + (φ(n) * y) = 1
-	 * 但e * x (mod φ(n)) != 1，这就不满足RSA的前提条件了,这时需对x稍作处理，让其在0 ~ φ(n)范围内，即加上一个φ(n)的倍数即可
-	 * 先检查一下算出的x是否小于0，如果小于0，正好相差一个模数，加上一个φ(n)的倍数即可
-	 */
-	while (x.compareTo(zero) == -1)
-		x = x.add(fn);
-	d = x;
-	System.out.println("d = " + d);
-	System.out.println("e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
-}
-
+private BigInteger fn, e, x, y, d;// x，y成员变量，用于保存generateD()计算时的中间值
+/**
+ * 下面的方法使用了扩展欧几里得算法获取逆元，用于RSA中获取密钥d所用
+ * 注意：通过扩展欧几里得算法得到的x,y可能为负数，最后要把它加上模的倍数，直到成正数
+ * @param a 欧几里得算法中的迭代参数a
+ * @param b 欧几里得算法中的迭代参数b
+ * @return 最大公约数
+ */
 private BigInteger extendEuclid(BigInteger a, BigInteger b) {
-	if (b.compareTo(zero) == 0) {
-		x = BigInteger.valueOf(1);
-		y = BigInteger.valueOf(0);
-		return a;
-	}
-	BigInteger gcd = extendEuclid(b, a.remainder(b));
-	BigInteger temp = x;
-	x = y;
-	y = temp.subtract(a.divide(b).multiply(y));
-	return gcd;
+    if (ZERO.equals(b)) {
+      x = ONE;
+      y = ZERO;
+      return a;
+    }
+    BigInteger gcd = extendEuclid(b, a.remainder(b));
+    BigInteger temp = x;
+    x = y;
+    y = temp.subtract(a.divide(b).multiply(y));
+    return gcd;
 }
 ```
 
@@ -445,37 +433,46 @@ private BigInteger extendEuclid(BigInteger a, BigInteger b) {
 代码如下：
 
 ```java
-private BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
-	if (exponent.compareTo(BigInteger.valueOf(1)) == 0) {// 如果指数为1，那么直接返回底数
-		return bottomNumber.remainder(module);
-	} else {
-		/*下面判断exponent的奇偶性，只要判断它最后一个bit位即可，1是奇数，0是偶数
-		getLowestSetBit()方法可以返回最右端的一个1的索引，例如84的二进制是01010100，最右边1的索引就是2*/
-		if (exponent.getLowestSetBit() == 0)
-		/*如果指数是奇数，那么底数做平方，指数减半后，还应该乘以剩下的一个底数
-		下面对指数的除2处理是通过移位运算完成的，指数除2取整，相当于做右移一位操作，“exponent >>= 1”操作相当于“exponent /= 2”，但是效率会更高*/
-			return (bottomNumber.multiply(powModByMontgomery(bottomNumber.multiply(bottomNumber).remainder(module), exponent.shiftRight(1),module)).remainder(module));
-		else
-			return (powModByMontgomery(bottomNumber.multiply(bottomNumber).remainder(module), exponent.shiftRight(1),module));
-	}
+BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
+  if (ONE.equals(exponent)) {// 如果指数为1，那么直接返回底数
+    return bottomNumber.remainder(module);
+  }
+  /*下面判断exponent的奇偶性，只要判断它最后一个bit位即可，1是奇数，0是偶数
+    getLowestSetBit()方法可以返回最右端的一个1的索引，例如84的二进制是01010100，最右边1的索引就是2*/
+  if (exponent.getLowestSetBit() == 0) {
+    /*如果指数是奇数，那么底数做平方，指数减半后，还应该乘以剩下的一个底数
+    下面对指数的除2处理是通过移位运算完成的，指数除2取整，相当于做右移一位操作，“exponent >>= 1”操作相当于“exponent /= 2”，但是效率会更高*/
+    return bottomNumber.multiply(powModByMontgomery(squareAndMod(bottomNumber, module), exponent.shiftRight(1), module)).remainder(module);
+  }
+  return powModByMontgomery(squareAndMod(bottomNumber, module), exponent.shiftRight(1), module);
+}
+
+/**
+ * 对底数进行平方然后去模
+ * @param bottomNumber 底数
+ * @param module 模
+ * @return 对底数进行平方然后去模的值
+ */
+private BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
+  return bottomNumber.multiply(bottomNumber).remainder(module);
 }
 ```
 ### 5.4 加密与解密
 终于，所有的准备工作已完成，剩下的就是简单的加密和解密。下面的一段测试代码将直接说明加密与解密的过程：
 
 ```java
+// 做一次检查，确保RSA的参数的正确性
 // 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
-BigInteger mm = new BigInteger(mArrayLength,new SecureRandom());
-System.out.println("test m = " + mm);
-//BigInteger cc = mm.modPow(e, n);// 这是JDK中的幂模运算实现
-BigInteger cc = powModByMontgomery(mm,e,n);
-System.out.println("test c = " + cc);
-//BigInteger dm = cc.modPow(d, n);
-BigInteger dm = powModByMontgomery(cc,d,n);
-System.out.println("test dm = " + dm);
-if(mm.compareTo(dm) != 0)
-	return false;
-else 
-	System.out.println("Test passed ");
+BigInteger mm = new BigInteger(mArrayLength, new SecureRandom());
+LOG.log(Level.FINEST, "test m = " + mm);
+BigInteger cc = powModByMontgomery(mm, e, n);
+LOG.log(Level.FINEST, "test c = " + cc);
+BigInteger dm = powModByMontgomery(cc, d, n);
+LOG.log(Level.FINEST, "test dm = " + dm);
+if (mm.compareTo(dm) != 0) {
+  LOG.log(Level.FINEST, "Test failed");
+} else {
+  LOG.log(Level.FINEST, "Test passed ");
+}
 ```
 
