@@ -392,25 +392,41 @@ gcd(a,b) = gcd(b,r) = gcd(b,a mod b) 。
 
 ```java
 private BigInteger fn, e, x, y, d;// x，y成员变量，用于保存generateD()计算时的中间值
-/**
- * 下面的方法使用了扩展欧几里得算法获取逆元，用于RSA中获取密钥d所用
- * 注意：通过扩展欧几里得算法得到的x,y可能为负数，最后要把它加上模的倍数，直到成正数
- * @param a 欧几里得算法中的迭代参数a
- * @param b 欧几里得算法中的迭代参数b
- * @return 最大公约数
- */
+    Euclid(BigInteger fn, BigInteger e) {
+    this.fn = fn;
+    this.e = e;
+    generateD();
+    }
+
+private void generateD() {
+    BigInteger gcd = extendEuclid(fn, e);// 在调用扩展欧几里得算法时，计算出x，y值
+    LOG.debug("gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
+    LOG.debug("x = " + x);
+    LOG.debug("y = " + y);
+    /*
+     * 调用了扩展欧几里得方法后，x,y满足： (φ(n) * x) + (e * y) = 1
+     * 这里不能完全保证y的正负性，如果y是负数，则需转换为同余正数，例如：-3 ≡ 2 (mod 5)
+     */
+    while (y.compareTo(ZERO) < 0)
+    y = y.add(fn);
+
+    d = y;
+    LOG.debug("d = " + d);
+    LOG.debug("e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
+    }
+
 private BigInteger extendEuclid(BigInteger a, BigInteger b) {
     if (ZERO.equals(b)) {
-      x = ONE;
-      y = ZERO;
-      return a;
+    x = ONE;
+    y = ZERO;
+    return a;
     }
     BigInteger gcd = extendEuclid(b, a.remainder(b));
     BigInteger temp = x;
     x = y;
     y = temp.subtract(a.divide(b).multiply(y));
     return gcd;
-}
+    }
 ```
 
 ### 5.3 大数的幂模运算
@@ -433,7 +449,7 @@ private BigInteger extendEuclid(BigInteger a, BigInteger b) {
 代码如下：
 
 ```java
-BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
+static BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
   if (ONE.equals(exponent)) {// 如果指数为1，那么直接返回底数
     return bottomNumber.remainder(module);
   }
@@ -447,13 +463,7 @@ BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigI
   return powModByMontgomery(squareAndMod(bottomNumber, module), exponent.shiftRight(1), module);
 }
 
-/**
- * 对底数进行平方然后去模
- * @param bottomNumber 底数
- * @param module 模
- * @return 对底数进行平方然后去模的值
- */
-private BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
+private static BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
   return bottomNumber.multiply(bottomNumber).remainder(module);
 }
 ```
@@ -461,18 +471,23 @@ private BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
 终于，所有的准备工作已完成，剩下的就是简单的加密和解密。下面的一段测试代码将直接说明加密与解密的过程：
 
 ```java
-// 做一次检查，确保RSA的参数的正确性
-// 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
-BigInteger mm = new BigInteger(mArrayLength, new SecureRandom());
-LOG.log(Level.FINEST, "test m = " + mm);
-BigInteger cc = powModByMontgomery(mm, e, n);
-LOG.log(Level.FINEST, "test c = " + cc);
-BigInteger dm = powModByMontgomery(cc, d, n);
-LOG.log(Level.FINEST, "test dm = " + dm);
-if (mm.compareTo(dm) != 0) {
-  LOG.log(Level.FINEST, "Test failed");
-} else {
-  LOG.log(Level.FINEST, "Test passed ");
-}
+private static boolean test(BigInteger e, BigInteger d, BigInteger n) {
+    // 做一次检查，确保RSA的参数的正确性
+    // 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
+    BigInteger mm = new BigInteger((n.bitLength() - 1) / 8, new SecureRandom());
+    LOG.debug("test m = " + mm);
+    //BigInteger cc = mm.modPow(e, n);
+    BigInteger cc = powModByMontgomery(mm, e, n);
+    LOG.debug("test c = " + cc);
+    //BigInteger dm = cc.modPow(d, n);
+    BigInteger dm = powModByMontgomery(cc, d, n);
+    LOG.debug("test dm = " + dm);
+    if (mm.compareTo(dm) != 0) {
+    LOG.debug("Test failed");
+    return false;
+    } else {
+    LOG.debug("Test passed ");
+    }
+    return true;
+    }
 ```
-
