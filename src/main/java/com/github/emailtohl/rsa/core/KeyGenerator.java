@@ -1,16 +1,17 @@
 package com.github.emailtohl.rsa.core;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static java.math.BigInteger.ONE;
 import static java.math.BigInteger.ZERO;
 
 /**
  * 由于前端大多数时候使用的JavaScript，该语言没有相关安全库，所以使用自己实现的RSA算法来对接前端生成的原始值。
- *
+ * <p>
  * RSA算法需要6个参数，p,q,n,φ(n),e,d ，其中：
  * p，q是随机生成的大素数，n = p * q ，是加密和解密计算时的模。
  * φ(n)（用fn表示）是n的欧拉函数值。
@@ -25,12 +26,20 @@ import static java.math.BigInteger.ZERO;
  *
  * @author HeLei
  */
-public class KeyGenerator {
-	private static final Logger LOG = Logger.getLogger(KeyGenerator.class.getName());
+public final class KeyGenerator {
+	private static final Logger LOG = LogManager.getLogger();
 
-	public KeyPairs generateKeys(int bitLength) {
+	private KeyGenerator() {
+	}
+
+	/**
+	 * 生成RSA密钥，其中n和e组成公钥，n和d组成私钥
+	 *
+	 * @param bitLength 密钥位数
+	 * @return 密钥，n,e,d三个元素
+	 */
+	public static Keys generateKeys(int bitLength) {
 		BigInteger p, q, n, fn, e, d;
-		int nBitLength, mArrayLength, cArrayLength;// 根据模n的位数确定一次性读取的明文和密文的长度
 		do {
 			p = generateP(bitLength);
 			q = generateQ(bitLength, p);
@@ -39,58 +48,54 @@ public class KeyGenerator {
 			e = generateE(fn);
 			Euclid euclid = new Euclid(fn, e);
 			d = euclid.getD();
-			nBitLength = n.bitLength();// 临时变量，用于存储模n的位数，供计算明文数组的长度和密文数组的长度所用
-			mArrayLength = calculateMArrayLength(nBitLength);
-			cArrayLength = calculateCArrayLength(nBitLength);
-		} while (!test(e, d, n, mArrayLength));// 用本方法进行加密和解密，以确保生成的RSA参数正确性
-		KeyPairs keys = new KeyPairs();
-		keys.setModule(n);
-		keys.setPublicKey(e);
-		keys.setPrivateKey(d);
-		keys.setModuleBitLength(nBitLength);
-		keys.setmArrayLength(mArrayLength);
-		keys.setcArrayLength(cArrayLength);
-		return keys;
+		} while (!test(e, d, n));// 用本方法进行加密和解密，以确保生成的RSA参数正确性
+		return new Keys(n, e, d);
 	}
+
 	/**
 	 * 用JDK自带的方法获取大素数，但需注意的是，获取的值，只是“有可能”是素数，所以还需要测试
+	 *
 	 * @param bitLength 密钥的bit位长度，越长越安全，但是性能会越低
 	 * @return p的值
 	 */
-	private BigInteger generateP(int bitLength) {
+	private static BigInteger generateP(int bitLength) {
 		return BigInteger.probablePrime(bitLength, new SecureRandom());
 	}
 
 	/**
 	 * 同上
+	 *
 	 * @param bitLength 密钥的bit位长度，越长越安全，但是性能会越低
-	 * @param p 不能让q与p相等
+	 * @param p         不能让q与p相等
 	 * @return q的值
 	 */
-	private BigInteger generateQ(int bitLength, BigInteger p) {
+	private static BigInteger generateQ(int bitLength, BigInteger p) {
 		BigInteger q;
 		do {
 			q = BigInteger.probablePrime(bitLength, new SecureRandom());
 		} while (q.equals(p));
 		return q;
 	}
+
 	/**
 	 * 通过两个素数求得模N
+	 *
 	 * @param p p的值
 	 * @param q q的值
 	 * @return p和q的乘积
 	 */
-	private BigInteger generateN(BigInteger p, BigInteger q) {
+	private static BigInteger generateN(BigInteger p, BigInteger q) {
 		return p.multiply(q);
 	}
 
 	/**
 	 * p，q如果是素数的话，φ(p * q) = φ(p) * φ(q)
+	 *
 	 * @param p p的值
 	 * @param q q的值
 	 * @return 返回n（p和q乘积）的欧拉函数值
 	 */
-	private BigInteger generateFn(BigInteger p, BigInteger q) {
+	private static BigInteger generateFn(BigInteger p, BigInteger q) {
 		// 若n是奇数，则φ(n) = n - 1
 		BigInteger fp = p.subtract(ONE);
 		BigInteger fq = q.subtract(ONE);
@@ -99,10 +104,11 @@ public class KeyGenerator {
 
 	/**
 	 * 对于e来说，选取一个素数即可，一般选65537
+	 *
 	 * @param fn n的欧拉函数值
 	 * @return 公钥e
 	 */
-	private BigInteger generateE(BigInteger fn) {
+	private static BigInteger generateE(BigInteger fn) {
 		BigInteger e = BigInteger.valueOf(65537);// 65537的二进制只有两个1，据说加密速度会更快
 		if (ZERO.equals(fn.remainder(e))) {
 			e = BigInteger.valueOf(257);
@@ -111,7 +117,7 @@ public class KeyGenerator {
 				if (ZERO.equals(fn.remainder(e))) {
 					e = BigInteger.valueOf(3);
 					if (ZERO.equals(fn.remainder(e))) {
-						LOG.log(Level.SEVERE, "Create a RSA parameter failure, re execution");// 如果模n与上面的素数都不互素的话，创建RSA参数失败
+						LOG.error("Create a RSA parameter failure, re execution");// 如果模n与上面的素数都不互素的话，创建RSA参数失败
 						throw (new RuntimeException("Not selected to the correct public key !"));// 抛出异常，重新执行
 					}
 				}
@@ -122,20 +128,23 @@ public class KeyGenerator {
 
 	/**
 	 * 计算逆元需要使用成员变量，为了避免使用同步锁，故创建内部类
+	 *
 	 * @author helei
 	 */
-	private class Euclid {
+	private static class Euclid {
 		private BigInteger fn, e, x, y, d;// x，y成员变量，用于保存generateD()计算时的中间值
+
 		Euclid(BigInteger fn, BigInteger e) {
 			this.fn = fn;
 			this.e = e;
 			generateD();
 		}
+
 		private void generateD() {
 			BigInteger gcd = extendEuclid(fn, e);// 在调用扩展欧几里得算法时，计算出x，y值
-			LOG.log(Level.FINEST, "gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
-			LOG.log(Level.FINEST, "x = " + x);
-			LOG.log(Level.FINEST, "y = " + y);
+			LOG.debug("gcd = " + gcd);// 先打印查看最大公约数是否为1，保证无异常
+			LOG.debug("x = " + x);
+			LOG.debug("y = " + y);
 			/*
 			 * 调用了扩展欧几里得方法后，x,y满足： (φ(n) * x) + (e * y) = 1
 			 * 这里不能完全保证y的正负性，如果y是负数，则需转换为同余正数，例如：-3 ≡ 2 (mod 5)
@@ -144,13 +153,14 @@ public class KeyGenerator {
 				y = y.add(fn);
 
 			d = y;
-			LOG.log(Level.FINEST, "d = " + d);
-			LOG.log(Level.FINEST, "e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
+			LOG.debug("d = " + d);
+			LOG.debug("e * d (mod φ(n)) = " + (e.multiply(d).remainder(fn)));
 		}
 
 		/**
 		 * 下面的方法使用了扩展欧几里得算法获取逆元，用于RSA中获取密钥d所用
 		 * 注意：通过扩展欧几里得算法得到的x,y可能为负数，最后要把它加上模的倍数，直到成正数
+		 *
 		 * @param a 欧几里得算法中的迭代参数a
 		 * @param b 欧几里得算法中的迭代参数b
 		 * @return 最大公约数
@@ -172,51 +182,45 @@ public class KeyGenerator {
 			return d;
 		}
 	}
+
 	/**
 	 * 由于获取的p，q“有可能”是素数，所以在使用前，先做测试，为保证万一，验证3次
+	 *
 	 * @param e 公钥
 	 * @param d 私钥
 	 * @param n 运算范围的模n
-	 * @param mArrayLength 明文的bit位长度，它要小于运算范围模n的长度
 	 * @return 测试公钥和私钥是否找对了
 	 */
-	private boolean test(BigInteger e, BigInteger d, BigInteger n, int mArrayLength) {
+	private static boolean test(BigInteger e, BigInteger d, BigInteger n) {
 		// 做一次检查，确保RSA的参数的正确性
 		// 随机生成的 BigInteger，它是在 0 到 (2^numBits - 1)（包括）范围内均匀分布的值。
-		BigInteger mm = new BigInteger(mArrayLength, new SecureRandom());
-		LOG.log(Level.FINEST, "test m = " + mm);
+		BigInteger mm = new BigInteger((n.bitLength() - 1) / 8, new SecureRandom());
+		LOG.debug("test m = " + mm);
 		//BigInteger cc = mm.modPow(e, n);
 		BigInteger cc = powModByMontgomery(mm, e, n);
-		LOG.log(Level.FINEST, "test c = " + cc);
+		LOG.debug("test c = " + cc);
 		//BigInteger dm = cc.modPow(d, n);
 		BigInteger dm = powModByMontgomery(cc, d, n);
-		LOG.log(Level.FINEST, "test dm = " + dm);
+		LOG.debug("test dm = " + dm);
 		if (mm.compareTo(dm) != 0) {
-			LOG.log(Level.FINEST, "Test failed");
+			LOG.debug("Test failed");
 			return false;
 		} else {
-			LOG.log(Level.FINEST, "Test passed ");
+			LOG.debug("Test passed ");
 		}
 		return true;
-	}
-
-	private int calculateMArrayLength(int nBitLength) {
-		return (nBitLength - 1) / 8;// 保证m不大于n，这就要求n至少大于1字节，所以读取文件时，让m的位数比n少一位
-	}
-
-	private int calculateCArrayLength(int nBitLength) {
-		return (nBitLength / 8) + 1;// 加密时c在n范围内，但要保证cArrayLength数组能完整存放c的信息，c至少要大于等于n的长度
 	}
 
 	/**
 	 * 幂模运算也遵循乘法分配率，所以对于大数的幂模运算，可以先将底数做模运算后，再做指数运算，这样可以将数值运算保持在较小的数域范围内。
 	 * 蒙哥马利算法计算大数的幂模运算的思路是不断将指数进行除2分解，直到指数分解到1为止，当然每次分解指数时，同时也在计算底数的平方。
+	 *
 	 * @param bottomNumber 底数
-	 * @param exponent 指数
-	 * @param module 模
+	 * @param exponent     指数
+	 * @param module       模
 	 * @return 幂模运算后的值
 	 */
-	BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
+	static BigInteger powModByMontgomery(BigInteger bottomNumber, BigInteger exponent, BigInteger module) {
 		if (ONE.equals(exponent)) {// 如果指数为1，那么直接返回底数
 			return bottomNumber.remainder(module);
 		}
@@ -232,11 +236,12 @@ public class KeyGenerator {
 
 	/**
 	 * 对底数进行平方然后去模
+	 *
 	 * @param bottomNumber 底数
-	 * @param module 模
+	 * @param module       模
 	 * @return 对底数进行平方然后去模的值
 	 */
-	private BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
+	private static BigInteger squareAndMod(BigInteger bottomNumber, BigInteger module) {
 		return bottomNumber.multiply(bottomNumber).remainder(module);
 	}
 }
