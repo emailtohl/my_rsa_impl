@@ -166,6 +166,9 @@ public final class KeyGenerator {
 		 * @return 最大公约数
 		 */
 		private BigInteger extendEuclid(BigInteger a, BigInteger b) {
+			if (a.compareTo(b) < 0) {
+				return extendEuclid(b, a);
+			}
 			if (ZERO.equals(b)) {
 				x = ONE;
 				y = ZERO;
