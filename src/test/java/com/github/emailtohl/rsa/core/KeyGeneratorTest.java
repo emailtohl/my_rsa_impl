@@ -2,6 +2,8 @@ package com.github.emailtohl.rsa.core;
 
 import org.junit.jupiter.api.Test;
 import java.math.BigInteger;
+import java.util.Random;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KeyGeneratorTest {
@@ -11,7 +13,7 @@ public class KeyGeneratorTest {
     for (int i = 0; i < 10; i++) {
       new Thread(() -> {
         Keys keys = KeyGenerator.generateKeys(256);
-        String s = "hello RSA!";
+        String s = "hello RSA!" + new Random().nextInt(100);
         BigInteger m = new BigInteger(s.getBytes());// 注意，明文的数字一定要小于模
         BigInteger c = KeyGenerator.powModByMontgomery(m, keys.e, keys.n);
         System.out.println("密文是：" + c);
